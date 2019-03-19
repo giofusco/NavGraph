@@ -22,7 +22,7 @@ function varargout = NavGraph(varargin)
 
 % Edit the above text to modify the response to help NavGraph
 
-% Last Modified by GUIDE v2.5 18-Mar-2019 16:10:00
+% Last Modified by GUIDE v2.5 18-Mar-2019 21:49:42
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -59,6 +59,9 @@ handles.output = hObject;
 setappdata(gcf, 'nodesID', 0);
 setappdata(gcf, 'currentFloor', 0);
 setappdata(gcf, 'prevClickedNode', 0);
+setappdata(gcf, 'createEdge', 0);
+setappdata(gcf, 'edgeNodes', []);
+setappdata(gcf, 'currentNode', 0);
 setappdata(gcf, 'nodesHandles', []);
 setappdata(gcf, 'nodes', containers.Map('KeyType','uint32','ValueType','any'));
 setappdata(gcf, 'CLR_DEST', [0,0,1]);
@@ -135,6 +138,8 @@ contents = cellstr(get(hObject,'String'));
 currentFloor = contents{get(hObject,'Value')};
 setappdata(gcf, 'currentFloor', currentFloor);
 visualizeFloor(handles, contents{get(hObject,'Value')});
+setappdata(gcf, 'prevClickedNode', 0);
+setappdata(gcf, 'currentNode', 0);
 handles = plot_nodes(handles);
 guidata(hObject, handles);
 
@@ -170,14 +175,16 @@ nodeinfo.id = nodesID;
 nodeinfo.type = type;
 nodeinfo.position = [x y];
 nodeinfo.floor = getappdata(gcf, 'currentFloor');
+nodeinfo.label = num2str(nodesID);
 nodes(int32(nodesID)) = nodeinfo;
 color = getNodeColor(type);
-
-nodesHandles(end+1) = line(x, y, 'marker', 'O', 'LineWidth',2, ...
-        'MarkerSize',10, ...
+nodesHandles = getappdata(gcf, 'nodesHandles');
+nodesHandles(end+1) = line(x, y, 'marker', 'O', 'LineWidth',1, ...
+        'MarkerSize',6, ...
+        'MarkerEdgeColor', 'm', ...
         'MarkerFaceColor',color, ... 
         'userdata', nodesID, ...
-        'ButtonDownFcn', @highlightNode);
+        'ButtonDownFcn', {@highlightNode handles});
     
 setappdata(gcf, 'nodes', nodes);
 setappdata(gcf, 'nodesHandles', nodesHandles);
@@ -190,32 +197,48 @@ function pushbutton_addDestinationNode_Callback(hObject, eventdata, handles)
 handles = addNode(handles, 'destination');
 guidata(hObject, handles);
 
-function highlightNode(hObject, eventdata)
+function highlightNode(hObject, eventdata, handles)
+
+create_edge = getappdata(gcf, 'createEdge');
 idx = get(hObject, 'userdata');
-nHandles = getappdata(gcf, 'nodesHandles');
-prevClickedNode = getappdata(gcf, 'prevClickedNode');
-
-if (prevClickedNode > 0 || prevClickedNode == idx)
-    set(nHandles(prevClickedNode), 'MarkerEdgeColor', 'b');
-    set(nHandles(prevClickedNode), 'MarkerSize', 10);
-    draggable(nHandles(prevClickedNode), 'off');
-%   handles.prevClickedNode = idx;
-end
-if prevClickedNode ~= idx
-    set(hObject, 'MarkerEdgeColor', 'y');
-    set(hObject, 'MarkerSize', 15);
-    draggable(hObject, 'endfcn',@updateNodePosition);
-   % handles.prevClickedNode = idx;
-end
-
-if (prevClickedNode == idx)
-    setappdata(gcf, 'prevClickedNode', 0);
+if (create_edge)
+    edgeNodes = getappdata(gcf, 'edgeNodes');
+    edgeNodes(end+1) = idx;
+    if (length(edgeNodes) == 2)
+        setappdata(gcf, 'createEdge', 0);
+    end
 else
-    setappdata(gcf, 'prevClickedNode', idx);
+    idx = get(hObject, 'userdata');
+    nHandles = getappdata(gcf, 'nodesHandles');
+    prevClickedNode = getappdata(gcf, 'prevClickedNode');
+
+    if (prevClickedNode > 0 || prevClickedNode == idx)
+        set(nHandles(prevClickedNode), 'MarkerEdgeColor', 'm');
+        set(nHandles(prevClickedNode), 'MarkerSize', 6);
+        draggable(nHandles(prevClickedNode), 'off');
+    %   handles.prevClickedNode = idx;
+    end
+    if prevClickedNode ~= idx
+        nodes = getappdata(gcf, 'nodes');
+        nodeinfo = nodes(idx);
+        set(hObject, 'MarkerEdgeColor', 'y');
+        set(hObject, 'MarkerSize', 10);
+        draggable(hObject, 'endfcn',@updateNodePosition);
+
+        set(handles.edit_node_label, 'String', nodeinfo.label);
+        setappdata(gcf, 'currentNode', idx);
+       % handles.prevClickedNode = idx;
+    end
+
+    if (prevClickedNode == idx)
+        setappdata(gcf, 'prevClickedNode', 0);
+    else
+        setappdata(gcf, 'prevClickedNode', idx);
+    end
 end
 
 function updateNodePosition(hObject, eventdata)
-get(hObject)
+
 id = getappdata(gcf, 'prevClickedNode');
 nodes = getappdata(gcf, 'nodes');
 nodeinfo = nodes(id);
@@ -235,11 +258,12 @@ for n = 1 : length(nodes)
     nodeinfo = nodes(n);
     if nodeinfo.floor == currentFloor
         color = getNodeColor(nodeinfo.type);
-        nodesHandles(end+1) = line(nodeinfo.position(1), nodeinfo.position(2), 'marker', 'O', 'LineWidth',2, ...
-            'MarkerSize',10, ...
+        nodesHandles(end+1) = line(nodeinfo.position(1), nodeinfo.position(2), 'marker', 'O', 'LineWidth',1, ...
+            'MarkerSize',6, ...
+            'MarkerEdgeColor', 'm', ...
             'MarkerFaceColor',color, ... 
             'userdata', nodeinfo.id, ...
-            'ButtonDownFcn', @highlightNode);
+            'ButtonDownFcn', {@highlightNode handles});
     end
 end
 
@@ -250,7 +274,8 @@ function pushbutton_createEdge_Callback(hObject, eventdata, handles)
 % hObject    handle to pushbutton_createEdge (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-
+setappdata(gcf, 'createEdge', 1);
+setappdata(gcf, 'edge_cnt', 0);
 
 % --- Executes on button press in pushbutton4.
 function pushbutton4_Callback(hObject, eventdata, handles)
@@ -280,3 +305,68 @@ function pushbutton_addControlNode_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to pushbutton_addControlNode (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    empty - handles not created until after all CreateFcns called
+
+
+
+function edit_nodeID_Callback(hObject, eventdata, handles)
+% hObject    handle to edit_nodeID (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of edit_nodeID as text
+%        str2double(get(hObject,'String')) returns contents of edit_nodeID as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function edit_nodeID_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to edit_nodeID (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function edit_node_label_Callback(hObject, eventdata, handles)
+% hObject    handle to edit_node_label (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of edit_node_label as text
+%        str2double(get(hObject,'String')) returns contents of edit_node_label as a double
+
+idx = getappdata(gcf, 'currentNode');
+if (idx > 0)
+    nodes = getappdata(gcf, 'nodes');
+    nodeinfo = nodes(idx);
+    nodeinfo.label = get(hObject,'String');
+    nodes(idx) = nodeinfo;
+    setappdata(gcf, 'nodes', nodes);
+end
+
+% --- Executes during object creation, after setting all properties.
+function edit_node_label_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to edit_node_label (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on key press with focus on edit_node_label and none of its controls.
+function edit_node_label_KeyPressFcn(hObject, eventdata, handles)
+% hObject    handle to edit_node_label (see GCBO)
+% eventdata  structure with the following fields (see MATLAB.UI.CONTROL.UICONTROL)
+%	Key: name of the key that was pressed, in lower case
+%	Character: character interpretation of the key(s) that was pressed
+%	Modifier: name(s) of the modifier key(s) (i.e., control, shift) pressed
+% handles    structure with handles and user data (see GUIDATA)
+
