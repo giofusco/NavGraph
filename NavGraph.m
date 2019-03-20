@@ -266,20 +266,21 @@ setappdata(gcf, 'nodesHandles', nHandles);
 function createEdge()
 nodes = getappdata(gcf, 'nodes');
 edgeNodes = getappdata(gcf, 'edgeNodes');
+imsize = getappdata(gcf, 'imageSize');
 n1 = nodes(edgeNodes(1));
 n2 = nodes(edgeNodes(2));
 
 x = [n1.position(1) n2.position(1)];
 y = [n1.position(2) n2.position(2)];
-s1 = atan2d( y(2) - y(1), x(2) - x(1) );
-s2 = atan2d( y(1) - y(2), x(1) - x(2) );
+s2 = atan2d( ( y(2)-(imsize(1)-1) ) - (y(1)-(imsize(1)-1)), x(2) - x(1) );
+s1 = atan2d( ( y(1)-(imsize(1)-1) ) - (y(2)-(imsize(1)-1)), x(1) - x(2) );
 edgeinfo1 = [];
 edgeinfo2 = [];
 edgeinfo1.dest = edgeNodes(2);
-edgeinfo1.slope = s1;
+edgeinfo1.slope = s1
 
 edgeinfo2.dest = edgeNodes(1);
-edgeinfo2.slope = s2;
+edgeinfo2.slope = s2
 
 %edgesHandles = getappdata(gcf, 'edgesHandles');
 edgeHandle = line(x, y, 'marker', 'O', 'LineWidth',1, ...
