@@ -69,6 +69,7 @@ setappdata(gcf, 'nodes', containers.Map('KeyType','uint32','ValueType','any'));
 setappdata(gcf, 'CLR_DEST', [0,0,1]);
 setappdata(gcf, 'CLR_CTRL', [0,1,0]);
 setappdata(gcf, 'CLR_LINK', [1,0,0]);
+setappdata(gcf, 'imageSize', []);
 % Update handles structure
 guidata(hObject, handles);
 
@@ -127,7 +128,7 @@ function visualizeFloor(handles, floorNum)
     info = handles.floorsInfo(floorNum);
     h = imshow(info.map,'Parent', handles.axes1);    
     setappdata(gcf, 'imageHandle', h);
-
+    setappdata(gcf, 'imageSize', size(info.map));
 
 % --- Executes on selection change in popupmenu_floors.
 function popupmenu_floors_Callback(hObject, eventdata, handles)
@@ -171,27 +172,31 @@ end
 
 function handles = addNode(handles, type)
 nodes = getappdata(gcf, 'nodes');
+
 [x, y] = ginput(1);
-nodesID = getappdata(gcf, 'nodesID') + 1;
-setappdata(gcf, 'nodesID', nodesID);
-nodeinfo.id = nodesID;
-nodeinfo.type = type;
-nodeinfo.position = [x y];
-nodeinfo.floor = getappdata(gcf, 'currentFloor');
-nodeinfo.label = num2str(nodesID);
-nodeinfo.edges = [];
-nodes(int32(nodesID)) = nodeinfo;
-color = getNodeColor(type);
-nodesHandles = getappdata(gcf, 'nodesHandles');
-nodesHandles(end+1) = line(x, y, 'marker', 'O', 'LineWidth',1, ...
-        'MarkerSize',8, ...
-        'MarkerEdgeColor', 'm', ...
-        'MarkerFaceColor',color, ... 
-        'userdata', nodesID, ...
-        'ButtonDownFcn', {@highlightNode handles});
-    
-setappdata(gcf, 'nodes', nodes);
-setappdata(gcf, 'nodesHandles', nodesHandles);
+imsize = getappdata(gcf, 'imageSize');
+if (x >= 1 && x <= imsize(2) && y >= 1 && y <= imsize(1))
+    nodesID = getappdata(gcf, 'nodesID') + 1;
+    setappdata(gcf, 'nodesID', nodesID);
+    nodeinfo.id = nodesID;
+    nodeinfo.type = type;
+    nodeinfo.position = [x y];
+    nodeinfo.floor = getappdata(gcf, 'currentFloor');
+    nodeinfo.label = num2str(nodesID);
+    nodeinfo.edges = [];
+    nodes(int32(nodesID)) = nodeinfo;
+    color = getNodeColor(type);
+    nodesHandles = getappdata(gcf, 'nodesHandles');
+    nodesHandles(end+1) = line(x, y, 'marker', 'O', 'LineWidth',1, ...
+            'MarkerSize',8, ...
+            'MarkerEdgeColor', 'm', ...
+            'MarkerFaceColor',color, ... 
+            'userdata', nodesID, ...
+            'ButtonDownFcn', {@highlightNode handles});
+
+    setappdata(gcf, 'nodes', nodes);
+    setappdata(gcf, 'nodesHandles', nodesHandles);
+end
 
 % --- Executes on button press in pushbutton_addDestinationNode.
 function pushbutton_addDestinationNode_Callback(hObject, eventdata, handles)
@@ -220,7 +225,7 @@ if (create_edge)
         setappdata(gcf, 'edgeNodes', []);
     end
 else
-    idx = get(hObject, 'userdata');
+%     idx = get(hObject, 'userdata');
     
     prevClickedNode = getappdata(gcf, 'prevClickedNode');
 
@@ -255,6 +260,8 @@ for i = id
         set(nHandles(i),'ButtonDownFcn', {@highlightNode handles})
     end
 end
+setappdata(gcf, 'prevClickedNode', 0);
+setappdata(gcf, 'nodesHandles', nHandles);
 
 function createEdge()
 nodes = getappdata(gcf, 'nodes');
@@ -269,10 +276,10 @@ s2 = atan2d( y(1) - y(2), x(1) - x(2) );
 edgeinfo1 = [];
 edgeinfo2 = [];
 edgeinfo1.dest = edgeNodes(2);
-edgeinfo1.slope = s1
+edgeinfo1.slope = s1;
 
 edgeinfo2.dest = edgeNodes(1);
-edgeinfo2.slope = s2
+edgeinfo2.slope = s2;
 
 %edgesHandles = getappdata(gcf, 'edgesHandles');
 edgeHandle = line(x, y, 'marker', 'O', 'LineWidth',1, ...
@@ -284,9 +291,9 @@ edgeinfo2.handle = edgeHandle;
     
 n1.edges = [ n1.edges edgeinfo1 ];
 n2.edges = [ n2.edges edgeinfo2 ];
-
 nodes(edgeNodes(1)) = n1;
 nodes(edgeNodes(2)) = n2;
+setappdata(gcf, 'prevClickedNode', 0);
 setappdata(gcf, 'nodes', nodes);
 
 function highlightEdge(hObject, eventdata, handles)
@@ -295,7 +302,6 @@ get(hObject)
 % set(hObject, 'LineWidth', 2);
     
 function updateNodePosition(hObject, eventdata)
-
 id = getappdata(gcf, 'prevClickedNode');
 nodes = getappdata(gcf, 'nodes');
 nodeinfo = nodes(id);
@@ -323,7 +329,6 @@ end
 
 
 function handles = plot_nodes(handles)
-
 nodesHandles = [];
 currentFloor = getappdata(gcf, 'currentFloor');
 nodes = getappdata(gcf, 'nodes');
