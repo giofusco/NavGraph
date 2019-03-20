@@ -22,7 +22,7 @@ function varargout = NavGraph(varargin)
 
 % Edit the above text to modify the response to help NavGraph
 
-% Last Modified by GUIDE v2.5 18-Mar-2019 21:49:42
+% Last Modified by GUIDE v2.5 19-Mar-2019 12:59:53
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -59,10 +59,12 @@ handles.output = hObject;
 setappdata(gcf, 'nodesID', 0);
 setappdata(gcf, 'currentFloor', 0);
 setappdata(gcf, 'prevClickedNode', 0);
+setappdata(gcf, 'prevClickedEdge', 0);
 setappdata(gcf, 'createEdge', 0);
 setappdata(gcf, 'edgeNodes', []);
 setappdata(gcf, 'currentNode', 0);
 setappdata(gcf, 'nodesHandles', []);
+setappdata(gcf, 'edgesHandles', []);
 setappdata(gcf, 'nodes', containers.Map('KeyType','uint32','ValueType','any'));
 setappdata(gcf, 'CLR_DEST', [0,0,1]);
 setappdata(gcf, 'CLR_CTRL', [0,1,0]);
@@ -123,7 +125,8 @@ function handles = parseBuildingFile(hObject, handles, filename, path)
     
 function visualizeFloor(handles, floorNum)
     info = handles.floorsInfo(floorNum);
-    imshow(info.map,'Parent', handles.axes1);    
+    h = imshow(info.map,'Parent', handles.axes1);    
+    setappdata(gcf, 'imageHandle', h);
 
 
 % --- Executes on selection change in popupmenu_floors.
@@ -176,11 +179,12 @@ nodeinfo.type = type;
 nodeinfo.position = [x y];
 nodeinfo.floor = getappdata(gcf, 'currentFloor');
 nodeinfo.label = num2str(nodesID);
+nodeinfo.edges = [];
 nodes(int32(nodesID)) = nodeinfo;
 color = getNodeColor(type);
 nodesHandles = getappdata(gcf, 'nodesHandles');
 nodesHandles(end+1) = line(x, y, 'marker', 'O', 'LineWidth',1, ...
-        'MarkerSize',6, ...
+        'MarkerSize',8, ...
         'MarkerEdgeColor', 'm', ...
         'MarkerFaceColor',color, ... 
         'userdata', nodesID, ...
@@ -204,27 +208,31 @@ idx = get(hObject, 'userdata');
 if (create_edge)
     edgeNodes = getappdata(gcf, 'edgeNodes');
     edgeNodes(end+1) = idx;
+    set(hObject, 'MarkerEdgeColor', 'c');
+    set(hObject, 'MarkerSize', 15);
+    setappdata(gcf, 'edgeNodes', edgeNodes);
     if (length(edgeNodes) == 2)
         setappdata(gcf, 'createEdge', 0);
+        if (edgeNodes(1) ~= edgeNodes(2))
+            createEdge();
+        end
+        disableSelection(edgeNodes, handles);
+        setappdata(gcf, 'edgeNodes', []);
     end
 else
     idx = get(hObject, 'userdata');
-    nHandles = getappdata(gcf, 'nodesHandles');
+    
     prevClickedNode = getappdata(gcf, 'prevClickedNode');
 
     if (prevClickedNode > 0 || prevClickedNode == idx)
-        set(nHandles(prevClickedNode), 'MarkerEdgeColor', 'm');
-        set(nHandles(prevClickedNode), 'MarkerSize', 6);
-        draggable(nHandles(prevClickedNode), 'off');
-    %   handles.prevClickedNode = idx;
+        disableSelection(prevClickedNode, handles)
     end
     if prevClickedNode ~= idx
         nodes = getappdata(gcf, 'nodes');
         nodeinfo = nodes(idx);
         set(hObject, 'MarkerEdgeColor', 'y');
-        set(hObject, 'MarkerSize', 10);
+        set(hObject, 'MarkerSize', 11);
         draggable(hObject, 'endfcn',@updateNodePosition);
-
         set(handles.edit_node_label, 'String', nodeinfo.label);
         setappdata(gcf, 'currentNode', idx);
        % handles.prevClickedNode = idx;
@@ -237,6 +245,55 @@ else
     end
 end
 
+function disableSelection(id, handles)
+nHandles = getappdata(gcf, 'nodesHandles');
+for i = id
+    if (i > 0)
+        set(nHandles(i), 'MarkerEdgeColor', 'm');
+        set(nHandles(i), 'MarkerSize', 8);
+        draggable(nHandles(i), 'off');
+        set(nHandles(i),'ButtonDownFcn', {@highlightNode handles})
+    end
+end
+
+function createEdge()
+nodes = getappdata(gcf, 'nodes');
+edgeNodes = getappdata(gcf, 'edgeNodes');
+n1 = nodes(edgeNodes(1));
+n2 = nodes(edgeNodes(2));
+
+x = [n1.position(1) n2.position(1)];
+y = [n1.position(2) n2.position(2)];
+s1 = atan2d( y(2) - y(1), x(2) - x(1) );
+s2 = atan2d( y(1) - y(2), x(1) - x(2) );
+edgeinfo1 = [];
+edgeinfo2 = [];
+edgeinfo1.dest = edgeNodes(2);
+edgeinfo1.slope = s1
+
+edgeinfo2.dest = edgeNodes(1);
+edgeinfo2.slope = s2
+
+%edgesHandles = getappdata(gcf, 'edgesHandles');
+edgeHandle = line(x, y, 'marker', 'O', 'LineWidth',1, ...
+        'userdata', edgeNodes);
+uistack(edgeHandle, 'bottom');
+uistack(getappdata(gcf, 'imageHandle'), 'bottom');
+edgeinfo1.handle = edgeHandle;
+edgeinfo2.handle = edgeHandle;
+    
+n1.edges = [ n1.edges edgeinfo1 ];
+n2.edges = [ n2.edges edgeinfo2 ];
+
+nodes(edgeNodes(1)) = n1;
+nodes(edgeNodes(2)) = n2;
+setappdata(gcf, 'nodes', nodes);
+
+function highlightEdge(hObject, eventdata, handles)
+%lastSelEdge = setappdata(gcf, 'prevClickedEdge', 0);
+get(hObject)
+% set(hObject, 'LineWidth', 2);
+    
 function updateNodePosition(hObject, eventdata)
 
 id = getappdata(gcf, 'prevClickedNode');
@@ -247,6 +304,22 @@ new_y = get(hObject, 'YData');
 nodeinfo.position = [new_x new_y];
 nodes(id) = nodeinfo;
 setappdata(gcf, 'nodes', nodes);
+%update edges
+updateEdgesLayout(id)
+
+function updateEdgesLayout(id)
+nodes = getappdata(gcf, 'nodes');
+edges = nodes(id).edges;
+n1 = nodes(id);
+for e = 1 : length(edges)
+    if (edges(e).dest > 0)
+        n2 = nodes(edges(e).dest);
+        x = [n1.position(1) n2.position(1)];
+        y = [n1.position(2) n2.position(2)];
+        set(edges(e).handle, 'XData', x);
+        set(edges(e).handle, 'YData', y);
+    end
+end
 
 
 function handles = plot_nodes(handles)
@@ -259,7 +332,7 @@ for n = 1 : length(nodes)
     if nodeinfo.floor == currentFloor
         color = getNodeColor(nodeinfo.type);
         nodesHandles(end+1) = line(nodeinfo.position(1), nodeinfo.position(2), 'marker', 'O', 'LineWidth',1, ...
-            'MarkerSize',6, ...
+            'MarkerSize',8, ...
             'MarkerEdgeColor', 'm', ...
             'MarkerFaceColor',color, ... 
             'userdata', nodeinfo.id, ...
@@ -276,6 +349,8 @@ function pushbutton_createEdge_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 setappdata(gcf, 'createEdge', 1);
 setappdata(gcf, 'edge_cnt', 0);
+prevClickedNode = getappdata(gcf, 'prevClickedNode');
+disableSelection(prevClickedNode, handles);
 
 % --- Executes on button press in pushbutton4.
 function pushbutton4_Callback(hObject, eventdata, handles)
@@ -369,4 +444,3 @@ function edit_node_label_KeyPressFcn(hObject, eventdata, handles)
 %	Character: character interpretation of the key(s) that was pressed
 %	Modifier: name(s) of the modifier key(s) (i.e., control, shift) pressed
 % handles    structure with handles and user data (see GUIDATA)
-
