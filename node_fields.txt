@@ -1,0 +1,16 @@
+This is a brief description of the fields that compose a node.
+
+nodeinfo.id:        the id of the node in the graph (uint32)
+nodeinfo.type:      type of node, for now it can be Destination, Control and Link
+nodeinfo.position:  position of the node in the map ([u,v])
+nodeinfo.floor:     what floor the node is on (string)
+nodeinfo.label:     a short description of the node (i.e. Room 443) (string)
+nodeinfo.isDoor:    is the node/destination reachable after passing through a door (boolean)
+nodinfo.comments:   extended information about the nodes (e.g. include heads up about possible 
+                    obstacles or dangerous situations) (string)
+nodeinfo.edges:     a list of outgoing edges 
+
+an edge consists of:
+dest: id of the destination node
+angle: the angle of the connecting segment between two nodes 
+       (0 degrees is pointing straight to the right, 90 upward, -90 downward, -180 straight to the left)
