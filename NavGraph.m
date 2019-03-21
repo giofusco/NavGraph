@@ -22,7 +22,7 @@ function varargout = NavGraph(varargin)
 
 % Edit the above text to modify the response to help NavGraph
 
-% Last Modified by GUIDE v2.5 19-Mar-2019 12:59:53
+% Last Modified by GUIDE v2.5 20-Mar-2019 20:20:22
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -45,7 +45,7 @@ end
 
 
 % --- Executes just before NavGraph is made visible.
-function NavGraph_OpeningFcn(hObject, eventdata, handles, varargin)
+function NavGraph_OpeningFcn(hObject, ~, handles, varargin)
 % This function has no output args, see OutputFcn.
 % hObject    handle to figure
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -69,7 +69,11 @@ setappdata(gcf, 'nodes', containers.Map('KeyType','uint32','ValueType','any'));
 setappdata(gcf, 'CLR_DEST', [0,0,1]);
 setappdata(gcf, 'CLR_CTRL', [0,1,0]);
 setappdata(gcf, 'CLR_LINK', [1,0,0]);
+setappdata(gcf, 'SZ_DEST', 3);
+setappdata(gcf, 'SZ_CTRL', 2);
+setappdata(gcf, 'SZ_LINK', 3);
 setappdata(gcf, 'imageSize', []);
+setappdata(gcf, 'edgeNodesHandles', []);
 % Update handles structure
 guidata(hObject, handles);
 
@@ -78,7 +82,7 @@ guidata(hObject, handles);
 
 
 % --- Outputs from this function are returned to the command line.
-function varargout = NavGraph_OutputFcn(hObject, eventdata, handles) 
+function varargout = NavGraph_OutputFcn(~, ~, handles) 
 % varargout  cell array for returning output args (see VARARGOUT);
 % hObject    handle to figure
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -89,7 +93,7 @@ varargout{1} = handles.output;
 
 
 % --- Executes on button press in pushbutton_loadBuilding.
-function pushbutton_loadBuilding_Callback(hObject, eventdata, handles)
+function pushbutton_loadBuilding_Callback(hObject, ~, handles)
 % hObject    handle to pushbutton_loadBuilding (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
@@ -104,8 +108,8 @@ end
 guidata(hObject, handles);
 
 
-function handles = parseBuildingFile(hObject, handles, filename, path)
-    addpath(('YAMLMatlab_0.4.3'));
+function handles = parseBuildingFile(~, handles, filename, path)
+    addpath(('tools/YAMLMatlab_0.4.3'));
     result = ReadYaml(filename);
     popup_vals = {};
     for l = 1 : length(result.floors)
@@ -115,8 +119,6 @@ function handles = parseBuildingFile(hObject, handles, filename, path)
         info.scale = result.floors{l}.scale;
         handles.floorsInfo(num2str(result.floors{l}.id)) = info; 
         popup_vals{l} = num2str(result.floors{l}.id);
-        
-%         handles.FloorsDropDown.Items{end+1} = num2str(result.floors{l}.id);
     end
     set(handles.popupmenu_floors, 'String', popup_vals);
     % visualize map on file load
@@ -131,7 +133,7 @@ function visualizeFloor(handles, floorNum)
     setappdata(gcf, 'imageSize', size(info.map));
 
 % --- Executes on selection change in popupmenu_floors.
-function popupmenu_floors_Callback(hObject, eventdata, handles)
+function popupmenu_floors_Callback(hObject, ~, handles)
 % hObject    handle to popupmenu_floors (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
@@ -149,7 +151,7 @@ guidata(hObject, handles);
 
 
 % --- Executes during object creation, after setting all properties.
-function popupmenu_floors_CreateFcn(hObject, eventdata, handles)
+function popupmenu_floors_CreateFcn(hObject, ~, ~)
 % hObject    handle to popupmenu_floors (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    empty - handles not created until after all CreateFcns called
@@ -170,10 +172,21 @@ elseif strcmp(type, 'link')
     color = getappdata(gcf, 'CLR_LINK');
 end
 
+function radius = getNodeSize(type)
+radius = 0;
+if strcmp(type, 'destination')
+    radius = getappdata(gcf, 'SZ_DEST');
+elseif strcmp(type, 'control')
+    radius = getappdata(gcf, 'SZ_CTRL');
+elseif strcmp(type, 'link')
+    radius = getappdata(gcf, 'SZ_LINK');
+end
+
+% Function to add node to graph
 function handles = addNode(handles, type)
 nodes = getappdata(gcf, 'nodes');
 
-[x, y] = ginput(1);
+[x, y] = my_ginput(1);
 imsize = getappdata(gcf, 'imageSize');
 if (x >= 1 && x <= imsize(2) && y >= 1 && y <= imsize(1))
     nodesID = getappdata(gcf, 'nodesID') + 1;
@@ -183,16 +196,19 @@ if (x >= 1 && x <= imsize(2) && y >= 1 && y <= imsize(1))
     nodeinfo.position = [x y];
     nodeinfo.floor = getappdata(gcf, 'currentFloor');
     nodeinfo.label = num2str(nodesID);
+    nodeinfo.isDoor = 0;
+    nodeinfo.comments = "";
     nodeinfo.edges = [];
     nodes(int32(nodesID)) = nodeinfo;
     color = getNodeColor(type);
     nodesHandles = getappdata(gcf, 'nodesHandles');
-    nodesHandles(end+1) = line(x, y, 'marker', 'O', 'LineWidth',1, ...
-            'MarkerSize',8, ...
-            'MarkerEdgeColor', 'm', ...
-            'MarkerFaceColor',color, ... 
-            'userdata', nodesID, ...
-            'ButtonDownFcn', {@highlightNode handles});
+    radius = getNodeSize(type);
+    nodesHandles(end+1) = images.roi.Circle(gca,'Center',[x y], ...
+       'Radius', radius, 'FaceAlpha', 1, 'userdata', nodesID, ...
+       'InteractionsAllowed', 'translate', 'Color', color);
+    propListener = addlistener(nodesHandles(end),'ROIClicked',@(src, event)highlightNode(src, event, handles));
+    propListener = addlistener(nodesHandles(end),'ROIMoved',@(src, event)updateNodePosition(src, event));
+    propListener = addlistener(nodesHandles(end),'MovingROI',@(src, event)updateNodePosition(src, event));
 
     setappdata(gcf, 'nodes', nodes);
     setappdata(gcf, 'nodesHandles', nodesHandles);
@@ -208,155 +224,155 @@ guidata(hObject, handles);
 
 function highlightNode(hObject, eventdata, handles)
 
-create_edge = getappdata(gcf, 'createEdge');
-idx = get(hObject, 'userdata');
-if (create_edge)
-    edgeNodes = getappdata(gcf, 'edgeNodes');
-    edgeNodes(end+1) = idx;
-    set(hObject, 'MarkerEdgeColor', 'c');
-    set(hObject, 'MarkerSize', 15);
-    setappdata(gcf, 'edgeNodes', edgeNodes);
-    if (length(edgeNodes) == 2)
-        setappdata(gcf, 'createEdge', 0);
-        if (edgeNodes(1) ~= edgeNodes(2))
-            createEdge();
+    create_edge = getappdata(hObject.Parent.Parent, 'createEdge');
+    idx = get(hObject, 'userdata');
+    
+    if (create_edge)
+        edgeNodesHandles = getappdata(hObject.Parent.Parent, 'edgeNodesHandles');
+        edgeNodes = getappdata(hObject.Parent.Parent, 'edgeNodes');
+        edgeNodes(end+1) = idx;
+        set(hObject, 'StripeColor', 'y');
+        edgeNodesHandles(end+1) = hObject;
+        setappdata(hObject.Parent.Parent, 'edgeNodes', edgeNodes);
+        setappdata(hObject.Parent.Parent, 'edgeNodesHandles', edgeNodesHandles);
+        if (length(edgeNodes) == 2)
+            setappdata(hObject.Parent.Parent, 'createEdge', 0);
+            if (edgeNodes(1) ~= edgeNodes(2))
+                createEdge(hObject);
+            end
+            unselectNodes(edgeNodesHandles)
+            setappdata(hObject.Parent.Parent, 'edgeNodes', []);
+            setappdata(hObject.Parent.Parent, 'edgeNodesHandles', []);
         end
-        disableSelection(edgeNodes, handles);
-        setappdata(gcf, 'edgeNodes', []);
-    end
-else
-%     idx = get(hObject, 'userdata');
-    
-    prevClickedNode = getappdata(gcf, 'prevClickedNode');
-
-    if (prevClickedNode > 0 || prevClickedNode == idx)
-        disableSelection(prevClickedNode, handles)
-    end
-    if prevClickedNode ~= idx
-        nodes = getappdata(gcf, 'nodes');
+    else % node clicked, populate fields in GUI
+        nodes = getappdata(hObject.Parent.Parent, 'nodes');
         nodeinfo = nodes(idx);
-        set(hObject, 'MarkerEdgeColor', 'y');
-        set(hObject, 'MarkerSize', 11);
-        draggable(hObject, 'endfcn',@updateNodePosition);
+        set(handles.edit_nodeID, 'String', nodeinfo.id);
         set(handles.edit_node_label, 'String', nodeinfo.label);
-        setappdata(gcf, 'currentNode', idx);
-       % handles.prevClickedNode = idx;
+        set(handles.edit_node_comments, 'String', nodeinfo.comments);
+        set(handles.checkbox_isdoor, 'Value', nodeinfo.isDoor);
+        setappdata(hObject.Parent.Parent, 'currentNode', idx);
+
     end
-
-    if (prevClickedNode == idx)
-        setappdata(gcf, 'prevClickedNode', 0);
-    else
-        setappdata(gcf, 'prevClickedNode', idx);
-    end
-end
-
-function disableSelection(id, handles)
-nHandles = getappdata(gcf, 'nodesHandles');
-for i = id
-    if (i > 0)
-        set(nHandles(i), 'MarkerEdgeColor', 'm');
-        set(nHandles(i), 'MarkerSize', 8);
-        draggable(nHandles(i), 'off');
-        set(nHandles(i),'ButtonDownFcn', {@highlightNode handles})
-    end
-end
-setappdata(gcf, 'prevClickedNode', 0);
-setappdata(gcf, 'nodesHandles', nHandles);
-
-function createEdge()
-nodes = getappdata(gcf, 'nodes');
-edgeNodes = getappdata(gcf, 'edgeNodes');
-imsize = getappdata(gcf, 'imageSize');
-n1 = nodes(edgeNodes(1));
-n2 = nodes(edgeNodes(2));
-
-x = [n1.position(1) n2.position(1)];
-y = [n1.position(2) n2.position(2)];
-s2 = atan2d( ( y(2)-(imsize(1)-1) ) - (y(1)-(imsize(1)-1)), x(2) - x(1) );
-s1 = atan2d( ( y(1)-(imsize(1)-1) ) - (y(2)-(imsize(1)-1)), x(1) - x(2) );
-edgeinfo1 = [];
-edgeinfo2 = [];
-edgeinfo1.dest = edgeNodes(2);
-edgeinfo1.slope = s1
-
-edgeinfo2.dest = edgeNodes(1);
-edgeinfo2.slope = s2
-
-%edgesHandles = getappdata(gcf, 'edgesHandles');
-edgeHandle = line(x, y, 'marker', 'O', 'LineWidth',1, ...
-        'userdata', edgeNodes);
-uistack(edgeHandle, 'bottom');
-uistack(getappdata(gcf, 'imageHandle'), 'bottom');
-edgeinfo1.handle = edgeHandle;
-edgeinfo2.handle = edgeHandle;
     
-n1.edges = [ n1.edges edgeinfo1 ];
-n2.edges = [ n2.edges edgeinfo2 ];
-nodes(edgeNodes(1)) = n1;
-nodes(edgeNodes(2)) = n2;
-setappdata(gcf, 'prevClickedNode', 0);
-setappdata(gcf, 'nodes', nodes);
+function unselectNodes(edgeNodesHandles)
+for e = 1 : length(edgeNodesHandles)
+                set(edgeNodesHandles(e), 'StripeColor', 'none');
+end
+    
+% --- create new edge 
+function createEdge(hObject)
+    nodes = getappdata(hObject.Parent.Parent, 'nodes');
+    edgeNodes = getappdata(hObject.Parent.Parent, 'edgeNodes');
+    imsize = getappdata(hObject.Parent.Parent, 'imageSize');
+    n1 = nodes(edgeNodes(1));
+    n2 = nodes(edgeNodes(2));
+
+    x = [n1.position(1) n2.position(1)];
+    y = [n1.position(2) n2.position(2)];
+    s2 = atan2d( ( y(2)-(imsize(1)-1) ) - (y(1)-(imsize(1)-1)), x(2) - x(1) );
+    s1 = atan2d( ( y(1)-(imsize(1)-1) ) - (y(2)-(imsize(1)-1)), x(1) - x(2) );
+    edgeinfo1 = [];
+    edgeinfo2 = [];
+    edgeinfo1.dest = edgeNodes(2);
+    edgeinfo1.angle = s1;
+
+    edgeinfo2.dest = edgeNodes(1);
+    edgeinfo2.angle = s2;
+
+    coord = [ x(1) y(1); x(2) y(2)]; 
+    axes(hObject.Parent);
+    %edgesHandles = getappdata(gcf, 'edgesHandles');
+    edgeHandle = images.roi.Line(hObject.Parent, 'Position', coord, ...
+            'userdata', edgeNodes, 'InteractionsAllowed', 'none');
+
+    propListener = addlistener(edgeHandle,'ROIClicked',@(src, event)highlightEdge(src, event, handles));
+
+    edgeinfo1.handle = edgeHandle;
+    edgeinfo2.handle = edgeHandle;
+
+    n1.edges = [ n1.edges edgeinfo1 ];
+    n2.edges = [ n2.edges edgeinfo2 ];
+    nodes(edgeNodes(1)) = n1;
+    nodes(edgeNodes(2)) = n2;
+%     setappdata(gcf, 'prevClickedNode', 0);
+    setappdata(hObject.Parent.Parent, 'nodes', nodes);
+    
 
 function highlightEdge(hObject, eventdata, handles)
 %lastSelEdge = setappdata(gcf, 'prevClickedEdge', 0);
-get(hObject)
+    get(hObject)
 % set(hObject, 'LineWidth', 2);
     
 function updateNodePosition(hObject, eventdata)
-id = getappdata(gcf, 'prevClickedNode');
-nodes = getappdata(gcf, 'nodes');
-nodeinfo = nodes(id);
-new_x = get(hObject, 'XData');
-new_y = get(hObject, 'YData');
-nodeinfo.position = [new_x new_y];
-nodes(id) = nodeinfo;
-setappdata(gcf, 'nodes', nodes);
-%update edges
-updateEdgesLayout(id)
+    id = get(hObject,'UserData');
+    nodes = getappdata(hObject.Parent.Parent, 'nodes');
+    nodeinfo = nodes(id);
+    newcenter = get(hObject, 'Center');
+    nodeinfo.position = [newcenter(1) newcenter(2)];
+    nodes(id) = nodeinfo;
+    setappdata(hObject.Parent.Parent, 'nodes', nodes);
+    %update edges
+    updateEdgesLayout(hObject, id)
 
-function updateEdgesLayout(id)
-nodes = getappdata(gcf, 'nodes');
-edges = nodes(id).edges;
-n1 = nodes(id);
-for e = 1 : length(edges)
-    if (edges(e).dest > 0)
-        n2 = nodes(edges(e).dest);
-        x = [n1.position(1) n2.position(1)];
-        y = [n1.position(2) n2.position(2)];
-        set(edges(e).handle, 'XData', x);
-        set(edges(e).handle, 'YData', y);
+%update edges while dragging nodes
+function updateEdgesLayout(hObject, id)
+    nodes = getappdata(hObject.Parent.Parent, 'nodes');
+    edges = nodes(id).edges;
+    n1 = nodes(id);
+    for e = 1 : length(edges)
+        if (edges(e).dest > 0)
+            n2 = nodes(edges(e).dest);
+            x = [n1.position(1) n2.position(1)];
+            y = [n1.position(2) n2.position(2)];
+            imsize = getappdata(hObject.Parent.Parent, 'imageSize');
+            s2 = atan2d( ( y(2)-(imsize(1)-1) ) - (y(1)-(imsize(1)-1)), x(2) - x(1) );
+            s1 = atan2d( ( y(1)-(imsize(1)-1) ) - (y(2)-(imsize(1)-1)), x(1) - x(2) );
+            edges(e).angle = s1;
+            set(edges(e).handle, 'Position', [x(1) y(1); x(2) y(2)]);
+            dest_edges = n2.edges;
+            for e2 = 1 : length(dest_edges)
+                if e2 == id
+                    dest_edges(e2).angle = s2;
+                    break;
+                end
+            end
+            n2.edges = dest_edges;
+            nodes(edges(e).dest) = n2;
+        end
     end
-end
+    n1.edges = edges;
+    nodes(id) = n1;
+    setappdata(hObject.Parent.Parent, 'nodes', nodes);
 
-
-function handles = plot_nodes(handles)
-nodesHandles = [];
-currentFloor = getappdata(gcf, 'currentFloor');
-nodes = getappdata(gcf, 'nodes');
-for n = 1 : length(nodes)
-    nodeinfo = nodes(n);
-    if nodeinfo.floor == currentFloor
-        color = getNodeColor(nodeinfo.type);
-        nodesHandles(end+1) = line(nodeinfo.position(1), nodeinfo.position(2), 'marker', 'O', 'LineWidth',1, ...
-            'MarkerSize',8, ...
-            'MarkerEdgeColor', 'm', ...
-            'MarkerFaceColor',color, ... 
-            'userdata', nodeinfo.id, ...
-            'ButtonDownFcn', {@highlightNode handles});
-    end
-end
-
-setappdata(gcf, 'nodesHandles', nodesHandles);
+% function handles = plot_nodes(handles)
+% nodesHandles = [];
+% currentFloor = getappdata(gcf, 'currentFloor');
+% nodes = getappdata(gcf, 'nodes');
+% for n = 1 : length(nodes)
+%     nodeinfo = nodes(n);
+%     if nodeinfo.floor == currentFloor
+%         color = getNodeColor(nodeinfo.type);
+%         nodesHandles(end+1) = line(nodeinfo.position(1), nodeinfo.position(2), 'marker', 'O', 'LineWidth',1, ...
+%             'MarkerSize',8, ...
+%             'MarkerEdgeColor', 'm', ...
+%             'MarkerFaceColor',color, ... 
+%             'userdata', nodeinfo.id, ...
+%             'ButtonDownFcn', {@highlightNode handles});
+%     end
+% end
+% 
+% setappdata(gcf, 'nodesHandles', nodesHandles);
 
 % --- Executes on button press in pushbutton_createEdge.
 function pushbutton_createEdge_Callback(hObject, eventdata, handles)
 % hObject    handle to pushbutton_createEdge (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-setappdata(gcf, 'createEdge', 1);
-setappdata(gcf, 'edge_cnt', 0);
-prevClickedNode = getappdata(gcf, 'prevClickedNode');
-disableSelection(prevClickedNode, handles);
+    setappdata(gcf, 'createEdge', 1);
+    setappdata(gcf, 'edge_cnt', 0);
+% prevClickedNode = getappdata(gcf, 'prevClickedNode');
+
 
 % --- Executes on button press in pushbutton4.
 function pushbutton4_Callback(hObject, eventdata, handles)
@@ -450,3 +466,98 @@ function edit_node_label_KeyPressFcn(hObject, eventdata, handles)
 %	Character: character interpretation of the key(s) that was pressed
 %	Modifier: name(s) of the modifier key(s) (i.e., control, shift) pressed
 % handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in checkbox_isdoor.
+function checkbox_isdoor_Callback(hObject, eventdata, handles)
+% hObject    handle to checkbox_isdoor (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of checkbox_isdoor
+idx = getappdata(gcf, 'currentNode');
+if (idx > 0)
+    nodes = getappdata(gcf, 'nodes');
+    nodeinfo = nodes(idx);
+    nodeinfo.isDoor = get(hObject,'Value');
+    nodes(idx) = nodeinfo;
+    setappdata(gcf, 'nodes', nodes);
+end
+
+
+function edit_node_comments_Callback(hObject, eventdata, handles)
+% hObject    handle to edit_node_comments (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of edit_node_comments as text
+%        str2double(get(hObject,'String')) returns contents of edit_node_comments as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function edit_node_comments_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to edit_node_comments (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on key press with focus on edit_node_comments and none of its controls.
+function edit_node_comments_KeyPressFcn(hObject, eventdata, handles)
+% hObject    handle to edit_node_comments (see GCBO)
+% eventdata  structure with the following fields (see MATLAB.UI.CONTROL.UICONTROL)
+%	Key: name of the key that was pressed, in lower case
+%	Character: character interpretation of the key(s) that was pressed
+%	Modifier: name(s) of the modifier key(s) (i.e., control, shift) pressed
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pushbutton_save.
+function pushbutton_save_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton_save (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+[file,path] = uiputfile('*.json','Save Graph');
+
+% create cost matrix
+nodes = getappdata(hObject.Parent, 'nodes');
+W = zeros(length(nodes), length(nodes));
+A = zeros(length(nodes), length(nodes));
+tmpnodes = containers.Map('KeyType','char','ValueType','any');
+for i = 1 : length(nodes)
+    n = nodes(i);
+    ncopy = n;
+    ncopy.edges = 0;
+    tmpnodes(num2str(i)) = ncopy;
+    p1 = nodes(i).position;
+    edges = n.edges;
+    for e = 1 : length(edges)
+        n2 = nodes(edges(e).dest);
+        W(i,edges(e).dest) = norm(p1 - n2.position);
+        A(i,edges(e).dest) = edges(e).angle;
+    end
+end
+wjson = strcat('"weights" :', jsonencode(W));
+ajson = strcat('"angles" :', jsonencode(A));
+jsonfile = strcat('{ ', wjson);
+jsonfile = strcat(jsonfile, ajson);
+nodes_json = '"nodes" : [';
+nodes_json = strcat(nodes_json, jsonencode(tmpnodes));
+nodes_json = strcat(nodes_json, ' ]');
+jsonfile = strcat(jsonfile, nodes_json);
+% jsonfile = strcat(jsonfile, '\n}');
+
+fid = fopen(fullfile(path, file),'wt');
+fprintf(fid, '{\n');
+fprintf(fid, wjson);
+fprintf(fid, ', \n');
+fprintf(fid, ajson);
+fprintf(fid, ', \n');
+fprintf(fid, nodes_json);
+fprintf(fid, '\n}');
+fclose(fid);
